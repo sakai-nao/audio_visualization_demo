@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>音の可視化デモ</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* カラーパレット */
+    :root {
+      --primary: #007bff;
+      --primary-dark: #0056b3;
+      --accent: #00acc1;
+      --accent-dark: #00838f;
+      --danger: #FF5733;
+      --grid: rgba(0,0,0,0.08);
+      --bg-light: #ffffff;
+      --bg-container: #ffffff;
+      --text-light: #212121;
+      --border: #e0e0e0;
+    }
+
+    /* ダークモード */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-light: #121212;
+        --bg-container: #1e1e1e;
+        --text-light: #e5e5e5;
+        --grid: rgba(255,255,255,0.08);
+        --border: #333;
+      }
+    }
+
+    /* 基本レイアウト */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: var(--bg-light);
+      color: var(--text-light);
+      transition: background 0.3s, color 0.3s;
+      padding: 1rem;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: var(--bg-container);
+      border-radius: 15px;
+      padding: 2rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      border: 1px solid var(--border);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 2rem;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    /* キャンバスエリア */
+    .canvas-section {
+      margin-bottom: 2rem;
+    }
+
+    .canvas-section h2 {
+      margin-bottom: 1rem;
+      color: var(--accent);
+      font-size: 1.2rem;
+    }
+
+    canvas {
+      width: 100%;
+      border: 2px solid var(--primary);
+      border-radius: 10px;
+      background: var(--bg-container);
+      margin-bottom: 1rem;
+    }
+
+    #waveCanvas {
+      height: 420px;
+      background: var(--bg-light);
+    }
+
+    /* コントロールエリア */
+    .control-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+      margin-bottom: 1rem;
+    }
+
+    .control-group {
+      background: var(--bg-light);
+      padding: 1.5rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      margin-bottom: 1rem; /* control-rowと単独groupの間のマージン */
+    }
+
+    .control-group h3 {
+      margin-bottom: 1rem;
+      color: var(--primary);
+      font-size: 1.1rem;
+    }
+
+    /* スライダー */
+    .slider-container {
+      margin-bottom: 1rem;
+    }
+
+    .slider-container label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    .slider {
+      width: 100%;
+      height: 8px;
+      border-radius: 5px;
+      background: #ddd;
+      outline: none;
+      appearance: none;
+      transition: 0.2s;
+    }
+
+    .slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+    }
+
+    .slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      border: none;
+    }
+
+    .slider-value {
+      font-size: 1rem;
+      font-weight: bold;
+      color: var(--primary);
+      margin-top: 0.5rem;
+      text-align: center;
+    }
+
+    /* ボタン */
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    button {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .primary-btn {
+      background: var(--primary);
+      color: white;
+    }
+
+    .primary-btn:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    .wave-btn {
+      background: transparent;
+      color: var(--accent);
+      border: 2px solid var(--accent);
+    }
+
+    .wave-btn:hover,
+    .wave-btn.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* レスポンシブ */
+    @media (max-width: 768px) {
+      .container {
+        padding: 1rem;
+      }
+      
+      .controls {
+        grid-template-columns: 1fr;
+      }
+      
+      .button-group {
+        flex-direction: column;
+      }
+    }
+
+    /* 説明テキスト */
+    .description {
+      background: var(--bg-light);
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      border-left: 4px solid var(--accent);
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="canvas-section">
+      <h2>アナログ・デジタル波形の比較</h2>
+      <canvas id="waveCanvas"></canvas>
+    </div>
+    
+    <div class="control-group">
+      <h3>🎛️ 周波数設定</h3>
+      <div class="slider-container">
+        <label for="frequencySlider">周波数</label>
+        <input type="range"id="frequencySlider" min="20" max="2000" value="440" step="5" class="slider">
+        <div id="freqValue" class="slider-value">440 Hz</div>
+      </div>
+      <div class="button-group">
+        <button id="playButton" class="primary-btn">🔊 再生</button>
+      </div>
+    </div>
+
+    <div class="control-row">
+      <div class="control-group">
+        <h3>〰 波形選択</h3>
+        <div class="button-group" id="waveButtons">
+          <button data-type="sine" class="wave-btn active">正弦波</button>
+          <button data-type="square" class="wave-btn">矩形波</button>
+          <button data-type="triangle" class="wave-btn">三角波</button>
+          <button data-type="sawtooth" class="wave-btn">のこぎり波</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>⚙️ 表示設定</h3>
+        <div class="slider-container">
+          <label for="samplingSlider">サンプリング周波数</label>
+          <input type="range" id="samplingSlider" min="100" max="5000" value="2000" step="50" class="slider">
+          <div id="samplingValue" class="slider-value">2000 Hz</div>
+        </div>
+        <div class="slider-container">
+          <label for="quantizeSlider">量子化レベル</label>
+          <input type="range" id="quantizeSlider" min="1" max="16" value="8" class="slider">
+          <div id="quantizeValue" class="slider-value">8 段階</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+     * グローバル変数
+     * ============================================================ */
+    
+    // Web Audio API関連の変数を準備します。これらは音声の再生や分析に使います。
+    const AudioContext = window.AudioContext || window.webkitAudioContext; // ブラウザ間の互換性を考慮
+    let audioCtx = null;      // オーディオ処理の中心となるオブジェクト
+    let oscillator = null;    // 特定の周波数の波形（音）を生成するオブジェクト
+    let gainNode = null;      // 音量を制御するオブジェクト
+    let analyser = null;      // 音声データを分析するオブジェクト（今回は使いませんが、将来の拡張用に残しています）
+
+    // アプリケーションの状態を管理する変数
+    let isPlaying = false;    // 音が再生中かどうかを記録 (true: 再生中, false: 停止中)
+    let currentWave = 'sine'; // 現在選択されている波形の種類 ('sine', 'square', 'triangle', 'sawtooth')
+
+    // デジタル化のパラメータを管理する変数
+    let quantizationLevels = 8; // 量子化の段階数。初期値は8段階です。
+
+    // HTMLの要素（スライダーやボタンなど）をまとめて管理するオブジェクト
+    const elements = {
+      playButton: document.getElementById('playButton'),           // 再生/停止ボタン
+      freqSlider: document.getElementById('frequencySlider'),      // 周波数スライダー
+      freqValue: document.getElementById('freqValue'),             // 周波数スライダーの現在値を表示する場所
+      samplingSlider: document.getElementById('samplingSlider'),   // サンプリング周波数スライダー
+      samplingValue: document.getElementById('samplingValue'),     // サンプリング周波数の現在値を表示する場所
+      waveButtons: document.getElementById('waveButtons'),         // 波形選択ボタンのグループ
+      waveCanvas: document.getElementById('waveCanvas'),           // 波形を描画するキャンバス
+      quantizeSlider: document.getElementById('quantizeSlider'),   // 量子化レベルのスライダー
+      quantizeValue: document.getElementById('quantizeValue')      // 量子化レベルの現在値を表示する場所
+    };
+
+    // キャンバスに描画するための「コンテキスト」を取得します。これに描画命令を伝えます。
+    const waveCtx = elements.waveCanvas.getContext('2d');
+
+    /* ============================================================
+     * Web Audio API セットアップ
+     * ============================================================ */
+    
+    // 音を出すための準備をする関数
+    function setupAudio() {
+      // audioCtxがまだ作られていなければ、新しく作成します。
+      if (!audioCtx) audioCtx = new AudioContext();
+      // ユーザーの操作がないと音声がブロックされることがあるため、再開させます。
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      // 音を生成・制御するための各ノード（部品）を作成します。
+      oscillator = audioCtx.createOscillator(); // 音源（オシレーター）
+      gainNode = audioCtx.createGain();         // 音量（ゲイン）
+      analyser = audioCtx.createAnalyser();     // 分析（アナライザー）
+
+      // オシレーターの設定
+      oscillator.type = currentWave; // 波形の種類を設定
+      oscillator.frequency.value = elements.freqSlider.value; // 周波数をスライダーの値に設定
+      
+      // 各ノードを接続します。オシレーター -> ゲイン -> アナライザー -> 出力（スピーカー）
+      oscillator.connect(gainNode);
+      gainNode.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      
+      // 音量を設定します（大きすぎないように0.15にしています）
+      gainNode.gain.value = 0.15;
+    }
+
+    // 音の再生を開始する関数
+    function startTone() {
+      setupAudio(); // まず音の準備をします
+      oscillator.start(); // 音の再生を開始
+      isPlaying = true; // 再生中フラグをtrueに
+      elements.playButton.textContent = '⏹️ 停止'; // ボタンのテキストを「停止」に変更
+    }
+
+    // 音の再生を停止する関数
+    function stopTone() {
+      if (oscillator) {
+        oscillator.stop();        // 音を停止
+        oscillator.disconnect();  // ノードの接続を解除してメモリを解放
+      }
+      isPlaying = false; // 再生中フラグをfalseに
+      elements.playButton.textContent = '🔊 再生'; // ボタンのテキストを「再生」に戻す
+    }
+
+    /* ============================================================
+     * アナログ・デジタル波形描画
+     * ============================================================ */
+    
+    // ブラウザのウィンドウサイズが変更されたときに、キャンバスのサイズを再調整する関数
+    function resizeWaveCanvas() {
+      const rect = elements.waveCanvas.getBoundingClientRect();
+      elements.waveCanvas.width = rect.width; // キャンバスの幅を親要素に合わせる
+      elements.waveCanvas.height = 420;       // キャンバスの高さは固定
+      drawWaveComparison(); // サイズ変更後に波形を再描画
+    }
+
+    // アナログ波形とデジタル波形の比較をキャンバスに描画するメインの関数
+    function drawWaveComparison() {
+      const canvas = elements.waveCanvas;
+      const ctx = waveCtx;
+      
+      // 描画する前に、キャンバス全体をクリアします
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // --- 描画のための基本パラメータ ---
+      const amplitude = 48;      // 波の振幅（高さ）
+      const analogOffset = 110;  // アナログ波形を描画するY方向の位置（上側）
+      const digitalOffset = 270; // デジタル波形を描画するY方向の位置（下側）
+
+      // --- スライダーの値から描画パラメータを計算 ---
+      // 周波数スライダーの値に基づいて、キャンバス内に表示する波のサイクル数を決定します。
+      // これにより、周波数を変えると波の見た目（周期）も変わるようになります。
+      const baseFrequency = 440; // 基準となる周波数 (A4の音)
+      const baseCycles = 4;      // 基準周波数で表示するサイクル数
+      const currentFrequency = elements.freqSlider.value;
+      const numCycles = (currentFrequency / baseFrequency) * baseCycles;
+
+      // サンプリング周波数から、キャンバス上に何個のサンプリング点を描画するかを計算します。
+      const signalDuration = baseCycles / baseFrequency;      // キャンバスに表示する時間全体の長さ（秒）
+      const samplingFrequency = elements.samplingSlider.value;  // スライダーから取得したサンプリング周波数 (Hz)
+      const totalSamples = Math.floor(signalDuration * samplingFrequency); // 全体のサンプル数
+      const sampleIntervalPx = totalSamples > 1 ? canvas.width / (totalSamples - 1) : canvas.width; // サンプル間のピクセル間隔
+
+      // --- 背景の描画 ---
+      // 背景グリッドを描画します。
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid') || 'rgba(0,0,0,0.1)';
+      ctx.lineWidth = 1;
+      
+      // 量子化レベルを示す水平線をデジタル波形エリアに描画します。
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#FF5733';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= quantizationLevels; i++) {
+        const y = digitalOffset - amplitude + (i / quantizationLevels) * (amplitude * 2);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+      
+      // アナログ波形とデジタル波形エリアの真ん中に中心線を描画します。
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#00acc1';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, analogOffset);
+      ctx.lineTo(canvas.width, analogOffset);
+      ctx.moveTo(0, digitalOffset);
+      ctx.lineTo(canvas.width, digitalOffset);
+      ctx.stroke();
+
+      // --- 凡例（説明）の描画 ---
+      // === 左上：アナログ波形（連続）凡例 ===
+      ctx.save(); // 現在の描画スタイルを保存
+      ctx.font = 'bold 16px Roboto';
+      const analogLabel = 'アナログ波形（連続）';
+      const analogLabelWidth = ctx.measureText(analogLabel).width;
+      const analogLegendW = 12 + 20 + 8 + analogLabelWidth + 12; // パディング + 線 + ギャップ + ラベル + パディング
+      const analogLegendH = 38;
+      ctx.globalAlpha = 0.85; // 少し透明にする
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-container');
+      ctx.beginPath();
+      ctx.moveTo(12, 12 + 6);
+      ctx.arcTo(12, 12, 12 + analogLegendW, 12, 12);
+      ctx.arcTo(12 + analogLegendW, 12, 12 + analogLegendW, 12 + analogLegendH, 12);
+      ctx.arcTo(12 + analogLegendW, 12 + analogLegendH, 12, 12 + analogLegendH, 12);
+      ctx.arcTo(12, 12 + analogLegendH, 12, 12, 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1.0; // 透明度を戻す
+      // 線の凡例
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--primary') || '#007bff';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(12 + 12, 30);
+      ctx.lineTo(12 + 12 + 20, 30);
+      ctx.stroke();
+      // テキスト
+      ctx.font = 'bold 16px Roboto';
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--primary') || '#007bff';
+      ctx.fillText(analogLabel, 12 + 12 + 20 + 8, 36);
+      ctx.restore(); // 保存した描画スタイルに戻す
+
+      // === 左下：デジタル波形（離散）凡例 ===
+      ctx.save();
+      ctx.font = 'bold 16px Roboto';
+      const digitalLabel = 'デジタル波形（離散）';
+      const digitalLabelWidth = ctx.measureText(digitalLabel).width;
+      const digitalLegendW = 12 + 20 + 8 + digitalLabelWidth + 12; // パディング + 線 + ギャップ + ラベル + パディング
+      const digitalLegendH = 32;
+      const legendBottom = canvas.height - 50;
+      const legendRight = 12;
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-container');
+      ctx.beginPath();
+      ctx.moveTo(legendRight, legendBottom + 6);
+      ctx.arcTo(legendRight, legendBottom, legendRight + digitalLegendW, legendBottom, 12);
+      ctx.arcTo(legendRight + digitalLegendW, legendBottom, legendRight + digitalLegendW, legendBottom + digitalLegendH, 12);
+      ctx.arcTo(legendRight + digitalLegendW, legendBottom + digitalLegendH, legendRight, legendBottom + digitalLegendH, 12);
+      ctx.arcTo(legendRight, legendBottom + digitalLegendH, legendRight, legendBottom, 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+      // 線の凡例
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#FF5733';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(legendRight + 12, legendBottom + 20);
+      ctx.lineTo(legendRight + 12 + 20, legendBottom + 20);
+      ctx.stroke();
+      // テキスト
+      ctx.font = 'bold 16px Roboto';
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#FF5733';
+      ctx.fillText(digitalLabel, legendRight + 12 + 20 + 8, legendBottom + 26);
+      ctx.restore();
+
+      // === 右下：サンプリング点・量子化レベル説明 ===
+      ctx.save();
+      ctx.font = '12px Roboto';
+      const desc1 = 'サンプリング点';
+      const desc2 = '量子化レベル';
+      const desc1Width = ctx.measureText(desc1).width;
+      const desc2Width = ctx.measureText(desc2).width;
+      const descW = Math.max(desc1Width, desc2Width) + 40;
+      const descH = 60;
+      const descBottomAdjusted = canvas.height - descH - 12;
+      const descRight = canvas.width - descW - 12;
+
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-container');
+      ctx.beginPath();
+      const r_br = 12;
+      ctx.moveTo(descRight + r_br, descBottomAdjusted);
+      ctx.arcTo(descRight + descW, descBottomAdjusted,   descRight + descW, descBottomAdjusted + descH, r_br);
+      ctx.arcTo(descRight + descW, descBottomAdjusted + descH, descRight, descBottomAdjusted + descH, r_br);
+      ctx.arcTo(descRight, descBottomAdjusted + descH, descRight, descBottomAdjusted, r_br);
+      ctx.arcTo(descRight, descBottomAdjusted, descRight + descW, descBottomAdjusted, r_br);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+      
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-light');
+      
+      // サンプリング点（アイコン）
+      ctx.beginPath();
+      ctx.arc(descRight + 16, descBottomAdjusted + 20, 7, 0, 2 * Math.PI);
+      ctx.fillStyle = '#FF6B35';
+      ctx.fill();
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-light');
+      ctx.fillText(desc1, descRight + 32, descBottomAdjusted + 24);
+      
+      // 量子化レベル（アイコン）
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#FF5733';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(descRight + 10, descBottomAdjusted + 42);
+      ctx.lineTo(descRight + 26, descBottomAdjusted + 42);
+      ctx.stroke();
+      ctx.fillText(desc2, descRight + 32, descBottomAdjusted + 46);
+      ctx.restore();
+
+      // === 右上：現在の設定情報を表示 ===
+      ctx.save();
+      const samplingInfo1 = `サンプリング周波数: ${samplingFrequency} Hz`;
+      const samplingInfo2 = `量子化レベル: ${quantizationLevels}段階`;
+      ctx.font = '12px Roboto';
+      ctx.textAlign = 'right';
+      
+      // テキストの長さに合わせてボックスの幅を動的に変更
+      const infoWidth = Math.max(ctx.measureText(samplingInfo1).width, ctx.measureText(samplingInfo2).width);
+      const boxWidth = infoWidth + 24;
+      const boxHeight = 52;
+      const boxX = canvas.width - boxWidth - 12;
+      const boxY = 12;
+
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-container');
+      
+      // 角丸の四角形を描画
+      ctx.beginPath();
+      const r_tr = 8;
+      ctx.moveTo(boxX + r_tr, boxY);
+      ctx.arcTo(boxX + boxWidth, boxY,   boxX + boxWidth, boxY + boxHeight, r_tr);
+      ctx.arcTo(boxX + boxWidth, boxY + boxHeight, boxX, boxY + boxHeight, r_tr);
+      ctx.arcTo(boxX, boxY + boxHeight, boxX, boxY, r_tr);
+      ctx.arcTo(boxX, boxY, boxX + boxWidth, boxY, r_tr);
+      ctx.closePath();
+      ctx.fill();
+
+      // テキストを描画
+      ctx.globalAlpha = 1.0;
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-light');
+      ctx.fillText(samplingInfo1, boxX + boxWidth - 12, boxY + 20);
+      ctx.fillText(samplingInfo2, boxX + boxWidth - 12, boxY + 40);
+      ctx.textAlign = 'left';
+      ctx.restore();
+
+
+      // --- アナログ波形の描画 ---
+      ctx.beginPath();
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--primary') || '#007bff';
+      ctx.lineWidth = 3;
+      
+      // forループを使ってキャンバスの左端から右端まで1ピクセルずつ線を描画
+      for (let x = 0; x < canvas.width; x++) {
+        // 現在のx座標に対応する波の角度を計算
+        const angle = (x / canvas.width) * numCycles * 2 * Math.PI;
+        let yValue; // 波のY座標(-1から1の範囲)
+        
+        // 選択されている波形の種類に応じて、yの値を計算
+        switch (currentWave) {
+          case 'sine':
+            yValue = Math.sin(angle);
+            break;
+          case 'square':
+            yValue = Math.sign(Math.sin(angle));
+            break;
+          case 'triangle':
+            yValue = (2 / Math.PI) * Math.asin(Math.sin(angle));
+            break;
+          case 'sawtooth':
+            yValue = 2 * (angle / (2 * Math.PI) - Math.floor(angle / (2 * Math.PI) + 0.5));
+            break;
+          default:
+            yValue = Math.sin(angle);
+        }
+        
+        // 計算したyValueを、キャンバス上の実際のY座標に変換
+        const y = yValue * amplitude + analogOffset;
+        // 最初の点はmoveToで始点を設定、それ以降はlineToで線を結ぶ
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke(); // 最後に線を描画
+
+      // --- デジタル化の処理と描画 ---
+      // 1. サンプリング: アナログ波形から一定間隔で点のデータを取得
+      const samplePoints = [];
+      for (let i = 0; i < totalSamples; i++) {
+        const x = i * sampleIntervalPx; // サンプリング点のX座標
+        const angle = (x / canvas.width) * numCycles * 2 * Math.PI;
+        let yValue;
+        
+        // 再度、波形の値を計算（アナログ波形の描画と同じロジック）
+        switch (currentWave) {
+          case 'sine': yValue = Math.sin(angle); break;
+          case 'square': yValue = Math.sign(Math.sin(angle)); break;
+          case 'triangle': yValue = (2 / Math.PI) * Math.asin(Math.sin(angle)); break;
+          case 'sawtooth': yValue = 2 * (angle / (2 * Math.PI) - Math.floor(angle / (2 * Math.PI) + 0.5)); break;
+          default: yValue = Math.sin(angle);
+        }
+        
+        const analogY = yValue * amplitude + analogOffset; // アナログ波形上でのY座標
+        // サンプリングした点の情報を配列に保存
+        samplePoints.push({ x: x, analogY: analogY, originalValue: yValue });
+      }
+
+      // 2. サンプリング点の可視化
+      samplePoints.forEach(point => {
+        // アナログ波形の上にサンプリング点（オレンジの丸）を描画
+        ctx.beginPath();
+        ctx.fillStyle = '#FF6B35';
+        ctx.arc(point.x, point.analogY, 4, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // サンプリング点からデジタル波形エリアまで点線を引く
+        ctx.beginPath();
+        ctx.strokeStyle = '#FF6B35';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]); // 点線スタイルに設定
+        ctx.moveTo(point.x, point.analogY);
+        ctx.lineTo(point.x, digitalOffset + amplitude);
+        ctx.stroke();
+        ctx.setLineDash([]); // 線スタイルを元に戻す
+      });
+
+      // 3. 量子化とデジタル波形の描画
+      if (samplePoints.length > 1) {
+        ctx.beginPath();
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#FF5733';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < samplePoints.length; i++) {
+          const point = samplePoints[i];
+          // 量子化: サンプリングした値（-1〜1）を、設定された段階数のいずれかに当てはめる
+          const quantizedLevel = Math.round(((point.originalValue + 1) / 2) * quantizationLevels);
+          const clampedLevel = Math.max(0, Math.min(quantizationLevels, quantizedLevel)); // 念のため範囲内に収める
+          const quantizedY = digitalOffset - amplitude + (clampedLevel / quantizationLevels) * (amplitude * 2);
+          
+          // 量子化された点同士を直線で結ぶ（ホールド処理）
+          if (i === 0) {
+            ctx.moveTo(point.x, quantizedY);
+          } else {
+            ctx.lineTo(point.x, quantizedY);
+          }
+        }
+        ctx.stroke();
+
+        // 量子化された後の点（赤い丸）を描画
+        for (let i = 0; i < samplePoints.length; i++) {
+          const point = samplePoints[i];
+          const quantizedLevel = Math.round(((point.originalValue + 1) / 2) * quantizationLevels);
+          const clampedLevel = Math.max(0, Math.min(quantizationLevels, quantizedLevel));
+          const quantizedY = digitalOffset - amplitude + (clampedLevel / quantizationLevels) * (amplitude * 2);
+          ctx.beginPath();
+          ctx.arc(point.x, quantizedY, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#FF5733';
+          ctx.fill();
+        }
+      }
+    }
+
+    /* ============================================================
+     * イベントリスナー
+     * ============================================================ */
+    
+    // サンプリング周波数スライダーのラベルを更新する関数
+    function updateSamplingFrequencyLabel(val) {
+      elements.samplingValue.textContent = `${val} Hz`;
+    }
+
+    // 再生ボタンがクリックされたときの処理
+    elements.playButton.addEventListener('click', () => {
+      // isPlayingがtrueなら停止、falseなら開始
+      isPlaying ? stopTone() : startTone();
+    });
+
+    // 周波数スライダーが操作されたときの処理
+    elements.freqSlider.addEventListener('input', (e) => {
+      const val = e.target.value;
+      elements.freqValue.textContent = `${val} Hz`; // ラベルを更新
+      if (oscillator) {
+        // 再生中であれば、音の周波数をリアルタイムで変更
+        oscillator.frequency.setValueAtTime(val, audioCtx.currentTime);
+      }
+      drawWaveComparison(); // 波形を再描画
+    });
+
+    // サンプリング周波数スライダーが操作されたときの処理
+    elements.samplingSlider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      updateSamplingFrequencyLabel(val); // ラベルを更新
+      drawWaveComparison(); // 波形を再描画
+    });
+
+    // 波形選択ボタンがクリックされたときの処理
+    elements.waveButtons.addEventListener('click', (e) => {
+      const type = e.target.dataset.type; // クリックされたボタンの種類を取得
+      if (!type) return; // ボタン以外の場所がクリックされた場合は何もしない
+      
+      currentWave = type; // 現在の波形タイプを更新
+      
+      // すべてのボタンから'active'クラスを削除
+      elements.waveButtons.querySelectorAll('button').forEach(btn => 
+        btn.classList.remove('active')
+      );
+      // クリックされたボタンに'active'クラスを追加
+      e.target.classList.add('active');
+      
+      drawWaveComparison(); // 波形を再描画
+      if (oscillator) oscillator.type = currentWave; // 再生中であれば、音の波形も変更
+    });
+
+    // 量子化レベルスライダーが操作されたときの処理
+    elements.quantizeSlider.addEventListener('input', (e) => {
+      quantizationLevels = parseInt(e.target.value); // 量子化レベルを更新
+      elements.quantizeValue.textContent = `${quantizationLevels} 段階`; // ラベルを更新
+      drawWaveComparison(); // 波形を再描画
+    });
+
+    // ブラウザのウィンドウがリサイズされたときの処理
+    window.addEventListener('resize', () => {
+      resizeWaveCanvas(); // キャンバスサイズを調整して再描画
+    });
+
+    /* ============================================================
+     * 初期化
+     * ============================================================ */
+    
+    // ページが読み込まれたときに最初に実行される関数
+    function init() {
+      // 初期状態でキャンバスを描画
+      resizeWaveCanvas();
+      
+      // 各スライダーの初期値をラベルに表示
+      elements.freqValue.textContent = `${elements.freqSlider.value} Hz`;
+      updateSamplingFrequencyLabel(parseInt(elements.samplingSlider.value));
+      quantizationLevels = parseInt(elements.quantizeSlider.value);
+      elements.quantizeValue.textContent = `${quantizationLevels} 段階`;
+
+      // 最初の波形を描画
+      drawWaveComparison();
+    }
+
+    // 初期化関数を実行
+    init();
+
+  </script>
+</body>
+</html>
